@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Receipt Screenshot Options</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #4285f4;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"], 
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #3367d6;
+    }
+    .toggle-container {
+      display: flex;
+      align-items: center;
+    }
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #4285f4;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-radius: 4px;
+    }
+    .keywords-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .keyword {
+      background-color: #e8f0fe;
+      padding: 5px 10px;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+    }
+    .keyword span {
+      margin-right: 5px;
+    }
+    .keyword button {
+      background: none;
+      border: none;
+      color: #5f6368;
+      cursor: pointer;
+      padding: 0;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .add-keyword {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    .add-keyword input {
+      flex-grow: 1;
+    }
+    .add-keyword button {
+      padding: 8px 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Receipt Screenshot Options</h1>
+  
+  <div class="section">
+    <div class="section-title">General Settings</div>
+    
+    <div class="form-group toggle-container">
+      <label class="toggle">
+        <input type="checkbox" id="autoDetect" checked>
+        <span class="slider"></span>
+      </label>
+      <span>Auto-detect receipts</span>
+    </div>
+    
+    <div class="form-group toggle-container">
+      <label class="toggle">
+        <input type="checkbox" id="showNotifications" checked>
+        <span class="slider"></span>
+      </label>
+      <span>Show notifications</span>
+    </div>
+    
+    <div class="form-group">
+      <label for="detectionThreshold">Detection Sensitivity</label>
+      <select id="detectionThreshold">
+        <option value="5">Very high sensitivity</option>
+        <option value="7">High sensitivity (recommended)</option>
+        <option value="9">Medium sensitivity</option>
+        <option value="11">Low sensitivity</option>
+      </select>
+      <div id="sensitivityDescription" class="setting-description">
+        High (recommended)
+      </div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">Save Location</div>
+    <div class="form-group">
+      <label for="saveFolder">Save screenshots to:</label>
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="saveFolder" placeholder="Default downloads folder" readonly>
+        <button id="chooseFolderBtn">Choose</button>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="filenameFormat">Filename format:</label>
+      <input type="text" id="filenameFormat" placeholder="receipt_{hostname}_{date}" value="receipt_{hostname}_{date}">
+      <div style="margin-top: 5px; font-size: 12px; color: #666;">
+        Available placeholders: {hostname}, {date}, {time}, {random}
+      </div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">Customize Detection Keywords</div>
+    
+    <div class="form-group">
+      <label>Strong Keywords</label>
+      <div class="keywords-container" id="strongKeywords"></div>
+      <div class="add-keyword">
+        <input type="text" id="newStrongKeyword" placeholder="Add new keyword">
+        <button id="addStrongKeyword">Add</button>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label>Supporting Keywords</label>
+      <div class="keywords-container" id="supportingKeywords"></div>
+      <div class="add-keyword">
+        <input type="text" id="newSupportingKeyword" placeholder="Add new keyword">
+        <button id="addSupportingKeyword">Add</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">Advanced Settings</div>
+    
+    <div class="form-group toggle-container">
+      <label class="toggle">
+        <input type="checkbox" id="screenshotDelay" checked>
+        <span class="slider"></span>
+      </label>
+      <span>Add delay before screenshot</span>
+    </div>
+    
+    <div class="form-group">
+      <label for="delayTime">Delay time (ms):</label>
+      <input type="number" id="delayTime" value="500" min="0" max="5000">
+    </div>
+  </div>
+  
+  <button id="saveSettings">Save Settings</button>
+  
+  <div class="status" id="status"></div>
+  
+  <script src="options.js"></script>
+</body>
+</html>

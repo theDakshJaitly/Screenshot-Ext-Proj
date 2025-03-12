@@ -1,0 +1,150 @@
+
+body {
+  font-family: 'Segoe UI', 'Tahoma', 'Geneva', 'Verdana', 'sans-serif';
+  margin: 0;
+  padding: 0;
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.popup-container {
+  width: 300px;
+  overflow: hidden;
+}
+
+.popup-header {
+  background-color: #4285f4;
+  color: white;
+  padding: 10px 15px;
+  text-align: center;
+}
+
+.popup-header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.popup-content {
+  padding: 15px;
+}
+
+.card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 12px;
+  margin-bottom: 15px;
+}
+
+.card h2 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #555;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #3367d6;
+}
+
+button.active {
+  background-color: #2a56c6;
+}
+
+.toggle-container {
+  margin: 10px 0;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.toggle-label {
+  font-size: 14px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 20px;
+  transition: .4s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .4s;
+}
+
+input:checked + .toggle-slider {
+  background-color: #4285f4;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.status-section {
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
+.status-section p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.popup-footer {
+  background-color: #f0f0f0;
+  padding: 10px 15px;
+  text-align: center;
+  border-top: 1px solid #ddd;
+}
+
+#resetButton {
+  background-color: #757575;
+}
+
+#resetButton:hover {
+  background-color: #616161;
+}
+
+/* State when feature is enabled */
+.feature-enabled .card {
+  border-left: 3px solid #4285f4;
+};

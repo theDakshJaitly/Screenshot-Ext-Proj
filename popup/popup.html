@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Receipt Screenshot</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #f5f5f5;
+    }
+    button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #3367d6;
+    }
+    button.danger {
+      background-color: #ea4335;
+    }
+    button.danger:hover {
+      background-color: #d33828;
+    }
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      margin: 15px 0;
+    }
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #4285f4;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .section-title {
+      font-weight: bold;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    .blocked-sites {
+      max-height: 150px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .site-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .site-item:last-child {
+      border-bottom: none;
+    }
+    .remove-btn {
+      background: none;
+      border: none;
+      color: #ea4335;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 5px;
+      margin: 0;
+    }
+    .remove-btn:hover {
+      text-decoration: underline;
+    }
+    .divider {
+      height: 1px;
+      background-color: #eee;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Receipt Screenshot</div>
+  
+  <div class="toggle-container">
+    <label class="toggle">
+      <input type="checkbox" id="autoDetect" checked>
+      <span class="slider"></span>
+    </label>
+    <span>Auto-detect receipts</span>
+  </div>
+  
+  <div class="status" id="status">Ready to detect receipts</div>
+  
+  <button id="manualScreenshot">Take Screenshot Now</button>
+  <button id="blockSite" class="danger">Block This Website</button>
+  <button id="openOptions">Options</button>
+  
+  <div class="divider"></div>
+  
+  <div class="section-title">Blocked Websites</div>
+  <div id="blockedSites" class="blocked-sites">
+    <div class="site-item">No websites blocked yet</div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
