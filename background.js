@@ -7,6 +7,33 @@ self.addEventListener('install', (event) => {
   console.log('Service worker installed');
 });
 
+let contextMenuCreated = false;
+
+// Create the context menu
+function createContextMenu() {
+  if (contextMenuCreated) return;
+  
+  try {
+    chrome.contextMenus.removeAll(() => {
+      chrome.contextMenus.create({
+        id: 'captureReceipt',
+        title: 'Capture Receipt',
+        contexts: ['page']
+      });
+      contextMenuCreated = true;
+    });
+  } catch (error) {
+    console.error('Error creating context menu:', error);
+  }
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'captureReceipt') {
+    chrome.tabs.sendMessage(tab.id, { action: 'takeScreenshot' });
+  }
+});
+
 // Receipt Screenshot Extension - Background Script
 
 // Listen for messages from popup or content scripts
@@ -76,6 +103,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // Indicate async response
   }
+
+  else if (request.action === 'saveScreenshot') {
+    try {
+      // Generate filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const hostname = new URL(request.originalUrl).hostname;
+      const filename = `receipt_${hostname}_${timestamp}.png`;
+
+      // Save the screenshot
+      chrome.downloads.download({
+        url: request.imageData,
+        filename: filename,
+        saveAs: false
+      }, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          console.error('Download failed:', chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          console.log('Screenshot saved:', filename);
+          sendResponse({ success: true, downloadId: downloadId });
+        }
+      });
+      
+      return true; // Keep message channel open
+    } catch (error) {
+      console.error('Error saving screenshot:', error);
+      sendResponse({ success: false, error: error.message });
+    }
+  }
+  return true;
 });
 
 // Watch for tab updates to check if auto-detection should be enabled
@@ -211,29 +268,9 @@ async function unblockWebsite(hostname) {
   }
 }
 
-// Initialize context menu
-function createContextMenu() {
-  chrome.contextMenus.create({
-    id: 'captureReceipt',
-    title: 'Capture Receipt',
-    contexts: ['page']
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Context menu creation error:', chrome.runtime.lastError);
-    }
-  });
-}
-
-// Set up context menu click handler - MOVED OUTSIDE onInstalled
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === 'captureReceipt') {
-    chrome.tabs.sendMessage(tab.id, { action: 'takeScreenshot' });
-  }
-});
-
-// Initialize context menu on install
+// Update the onInstalled listener
 chrome.runtime.onInstalled.addListener((details) => {
-  // Create context menu
+  // Create the context menu
   createContextMenu();
 
   // Set default settings on install
@@ -261,5 +298,27 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// Re-create context menu when service worker starts
-chrome.runtime.onStartup.addListener(createContextMenu);
+// Add context menu when service worker starts
+chrome.runtime.onStartup.addListener(() => {
+  createContextMenu();
+});
+
+// Add new function to save screenshots
+async function saveScreenshot(imageUrl, originalUrl) {
+  try {
+    const hostname = new URL(originalUrl).hostname;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `receipt_${hostname}_${timestamp}.png`;
+
+    await chrome.downloads.download({
+      url: imageUrl,
+      filename: filename,
+      saveAs: false
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error saving screenshot:', error);
+    throw error;
+  }
+}

@@ -6,7 +6,8 @@ let settings = {
   detectionThreshold: 7,
   showNotifications: true,
   screenshotDelay: true,
-  delayTime: 500
+  delayTime: 500,
+  cropScreenshot: true  // Add this line
 };
 
 // Load settings from storage
@@ -195,67 +196,182 @@ function detectReceipt() {
 // Function to find the receipt container using enhanced logic
 function findReceiptContainer() {
   try {
-    // Collect candidate containers
     const candidates = [];
     
-    // Strategy 1: Look for receipt-specific class/id elements
-    document.querySelectorAll('[id*="receipt"],[class*="receipt"],[id*="invoice"],[class*="invoice"],[id*="order-confirmation"],[class*="order-confirmation"]')
-      .forEach(el => candidates.push({element: el, score: 5}));
-    
-    // Strategy 2: Look for elements with the most currency matches
-    const elements = document.querySelectorAll('div, section, article, main');
-    elements.forEach(el => {
-      const currencyMatches = (el.innerText.match(/[\$\€\£]\s*\d+[,.]\d{2}/g) || []).length;
-      if (currencyMatches >= 3) {
-        candidates.push({element: el, score: currencyMatches});
+    // Strategy 1: Precise receipt containers with weighted scoring
+    const receiptSelectors = [
+      '[id*="receipt"]', '[class*="receipt"]',
+      '[id*="invoice"]', '[class*="invoice"]',
+      '[id*="order-confirmation"]', '[class*="order-confirmation"]',
+      '[id*="order-details"]', '[class*="order-details"]',
+      '[id*="payment-confirmation"]', '[class*="payment-confirmation"]'
+    ];
+
+    document.querySelectorAll(receiptSelectors.join(',')).forEach(el => {
+      const score = evaluateContainer(el);
+      if (score > 0) {
+        candidates.push({ element: el, score });
       }
     });
-    
-    // Strategy 3: Tables with item/price structure
+
+    // Strategy 2: Table-based detection with strict structure analysis
     document.querySelectorAll('table').forEach(table => {
-      let score = 0;
-      const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.toLowerCase());
-      
-      // Check for receipt-like headers
-      if (headers.some(h => /(item|description|product)/i.test(h)) && 
-          headers.some(h => /(price|amount|total)/i.test(h))) {
-        score += 4;
+      const score = evaluateTable(table);
+      if (score > 0) {
+        candidates.push({ element: table, score });
       }
-      
-      // Check for price content
-      const priceMatches = (table.innerText.match(/[\$\€\£]\s*\d+[,.]\d{2}/g) || []).length;
-      score += Math.min(priceMatches, 5);
-      
-      candidates.push({element: table, score: score});
     });
-    
-    // Sort candidates by score and select the best one
+
+    // Strategy 3: Structural analysis of content sections
+    document.querySelectorAll('div, section, article').forEach(el => {
+      if (el.children.length > 0) {  // Only check elements with children
+        const score = evaluateStructure(el);
+        if (score > 0) {
+          candidates.push({ element: el, score });
+        }
+      }
+    });
+
+    // Debug logging
+    console.log('Receipt candidates:', candidates.map(c => ({
+      element: c.element.tagName,
+      id: c.element.id,
+      class: c.element.className,
+      score: c.score
+    })));
+
+    // Sort and select best candidate
     candidates.sort((a, b) => b.score - a.score);
     
-    if (candidates.length > 0 && candidates[0].score >= 3) {
-      return candidates[0].element;
+    if (candidates.length > 0 && candidates[0].score >= 5) {
+      // Find the most compact container that includes all receipt content
+      return findOptimalContainer(candidates[0].element);
     }
-    
-    // Fallback to prior implementation as safety
-    const possibleContainers = [
-      document.querySelector('div[id*="receipt"], div[class*="receipt"]'),
-      document.querySelector('div[id*="invoice"], div[class*="invoice"]'),
-      document.querySelector('div[id*="order"], div[class*="order"]'),
-      document.querySelector('div[id*="confirmation"], div[class*="confirmation"]'),
-      document.querySelector('div[id*="summary"], div[class*="summary"]'),
-      document.querySelector('.order-details, .payment-details, .receipt-container')
-    ].filter(Boolean);
-    
-    if (possibleContainers.length > 0) {
-      return possibleContainers[0];
-    }
-    
-    // Fallback to main content
+
     return document.querySelector('main') || document.body;
   } catch (error) {
     console.warn('Error finding receipt container:', error);
     return document.body;
   }
+}
+
+function evaluateContainer(element) {
+  let score = 0;
+  const text = element.innerText.toLowerCase();
+  
+  // Check for essential receipt components
+  if (/(sub)?total|amount paid|grand total/i.test(text)) score += 3;
+  if (/order\s*(#|number|id)/i.test(text)) score += 2;
+  if (/date|payment method/i.test(text)) score += 2;
+  
+  // Check price patterns
+  const prices = text.match(/[\$\€\£]\s*\d+[,.]\d{2}/g) || [];
+  score += Math.min(prices.length, 5);
+  
+  // Check layout structure
+  if (element.querySelector('table')) score += 2;
+  if (element.querySelectorAll('div[class*="row"], div[class*="item"]').length > 2) score += 2;
+  
+  // Check dimensions and position
+  const rect = element.getBoundingClientRect();
+  if (rect.width > 200 && rect.width < window.innerWidth * 0.9) score += 1;
+  if (rect.height > 200 && rect.height < document.body.scrollHeight * 0.9) score += 1;
+
+  return score;
+}
+
+function evaluateTable(table) {
+  let score = 0;
+  const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.toLowerCase());
+  
+  // Check for receipt-like columns
+  if (headers.some(h => /(item|description|product)/i.test(h))) score += 2;
+  if (headers.some(h => /(price|amount|total)/i.test(h))) score += 2;
+  if (headers.some(h => /(quantity|qty)/i.test(h))) score += 1;
+  
+  // Check for price content
+  const rows = table.querySelectorAll('tr');
+  let priceColumns = 0;
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    cells.forEach(cell => {
+      if (/[\$\€\£]\s*\d+[,.]\d{2}/.test(cell.textContent)) {
+        priceColumns++;
+      }
+    });
+  });
+  
+  score += Math.min(priceColumns / rows.length, 3);
+  return score;
+}
+
+function evaluateStructure(element) {
+  let score = 0;
+  const text = element.innerText.toLowerCase();
+
+  // Check content structure
+  const contentStructure = {
+    // Receipt header checks
+    hasHeader: /(receipt|invoice|order confirmation)/i.test(element.querySelector('header, .header, h1, h2')?.textContent || ''),
+    
+    // Item list checks
+    hasItemList: element.querySelectorAll('li, tr, div[class*="item"]').length > 2,
+    
+    // Price patterns
+    hasPricePatterns: /[\$\€\£]\s*\d+[,.]\d{2}/g.test(text),
+    
+    // Receipt footer checks
+    hasFooter: /(thank you|total|subtotal|balance)/i.test(element.querySelector('footer, .footer, *:last-child')?.textContent || '')
+  };
+
+  // Score based on structure
+  if (contentStructure.hasHeader) score += 3;
+  if (contentStructure.hasItemList) score += 2;
+  if (contentStructure.hasPricePatterns) score += 2;
+  if (contentStructure.hasFooter) score += 2;
+
+  // Check for receipt-like layout
+  const layout = {
+    hasTable: element.querySelector('table') !== null,
+    hasGrid: element.querySelectorAll('div[class*="grid"], div[class*="row"]').length > 0,
+    hasColumns: element.querySelectorAll('div[class*="col"], td').length > 0
+  };
+
+  if (layout.hasTable) score += 2;
+  if (layout.hasGrid) score += 1;
+  if (layout.hasColumns) score += 1;
+
+  // Check content density and size
+  const rect = element.getBoundingClientRect();
+  const contentDensity = text.length / (rect.width * rect.height);
+  
+  if (contentDensity > 0.01) score += 1; // Dense content
+  if (rect.width > 300 && rect.width < window.innerWidth * 0.8) score += 1; // Good width
+  if (rect.height > 200 && rect.height < window.innerHeight * 0.9) score += 1; // Good height
+
+  return score;
+}
+
+function findOptimalContainer(element) {
+  // Look for the smallest container that contains all receipt content
+  let current = element;
+  let best = element;
+  let bestScore = evaluateContainer(element);
+
+  while (current.parentElement && 
+         current.parentElement !== document.body && 
+         current.parentElement.tagName !== 'MAIN') {
+    const parent = current.parentElement;
+    const parentScore = evaluateContainer(parent);
+    
+    if (parentScore > bestScore) {
+      best = parent;
+      bestScore = parentScore;
+    }
+    current = parent;
+  }
+
+  return best;
 }
 
 // Function to show an in-page toast notification
@@ -309,38 +425,90 @@ async function captureReceipt() {
       }
       return false;
     }
+
+    console.log('Receipt element found:', receiptElement);
+
+    const elementToCapture = receiptElement;
+    const padding = 20;
+
+    // Get the element's position relative to the viewport
+    const rect = elementToCapture.getBoundingClientRect();
     
-    const originalBorder = receiptElement.style.border;
-    receiptElement.style.border = '2px solid rgba(66, 133, 244, 0.7)';
-    receiptElement.scrollIntoView({behavior: 'smooth', block: 'center'});
-    
-    if (settings.screenshotDelay) {
-      await new Promise(resolve => setTimeout(resolve, settings.delayTime));
-    }
-    
+    // Calculate scroll position
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+    // Create visual highlight with fixed positioning
+    const highlighter = document.createElement('div');
+    highlighter.style.position = 'fixed'; // Changed to fixed
+    highlighter.style.border = '2px solid rgba(66, 133, 244, 0.7)';
+    highlighter.style.backgroundColor = 'rgba(66, 133, 244, 0.1)';
+    highlighter.style.zIndex = '9999';
+    highlighter.style.pointerEvents = 'none';
+    Object.assign(highlighter.style, {
+      left: (rect.left - padding) + 'px',
+      top: (rect.top - padding) + 'px',
+      width: (rect.width + padding * 2) + 'px',
+      height: (rect.height + padding * 2) + 'px'
+    });
+    document.body.appendChild(highlighter);
+
+    // Scroll the element into view
+    elementToCapture.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+
+    // Wait for scroll and animations
+    await new Promise(resolve => setTimeout(resolve, settings.delayTime || 500));
+
     if (settings.showNotifications) {
       showToast('Taking receipt screenshot...');
     }
-    
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { action: 'receiptDetected' },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            setTimeout(() => {
-              receiptElement.style.border = originalBorder;
-            }, 1000);
-            resolve(response?.success || false);
-          }
-        }
-      );
+
+    // Take screenshot with corrected capture area
+    const canvas = await html2canvas(elementToCapture, {
+      backgroundColor: '#ffffff',
+      logging: false,
+      scale: window.devicePixelRatio || 1,
+      useCORS: true,
+      allowTaint: true,
+      foreignObjectRendering: false,
+      // Remove x, y, width, height to capture the entire element
+      scrollX: -window.scrollX,
+      scrollY: -window.scrollY,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight
     });
+
+    // Clean up
+    document.body.removeChild(highlighter);
+
+    // Convert to data URL
+    const imageData = canvas.toDataURL('image/png', 1.0);
+
+    // Send to background script
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({
+        action: 'saveScreenshot',
+        imageData: imageData,
+        originalUrl: window.location.href
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          if (settings.showNotifications) {
+            showToast('Receipt saved successfully!');
+          }
+          resolve(true);
+        }
+      });
+    });
+
   } catch (error) {
     console.error('Error capturing receipt:', error);
     if (settings.showNotifications) {
-      showToast('Error capturing receipt', 'error');
+      showToast('Error capturing receipt: ' + error.message, 'error');
     }
     return false;
   }

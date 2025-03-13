@@ -1,3 +1,22 @@
+// Move this function outside the DOMContentLoaded event listener
+function showSavedMessage() {
+    const statusElement = document.getElementById('status');
+    if (!statusElement) return;
+
+    statusElement.textContent = 'Settings saved successfully!';
+    statusElement.style.backgroundColor = '#e8f5e9';
+    statusElement.style.color = '#2e7d32';
+    statusElement.style.padding = '10px';
+    statusElement.style.borderRadius = '4px';
+    statusElement.style.marginTop = '20px';
+
+    // Clear the message after 2 seconds
+    setTimeout(() => {
+        statusElement.textContent = '';
+        statusElement.style.backgroundColor = '#f5f5f5';
+    }, 2000);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Get form elements
     const autoDetectToggle = document.getElementById('autoDetect');
@@ -16,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const delayTimeInput = document.getElementById('delayTime');
     const saveSettingsBtn = document.getElementById('saveSettings');
     const statusElement = document.getElementById('status');
+    const cropScreenshotToggle = document.getElementById('cropScreenshot');
     
     // Default detection keywords
     const defaultStrongKeywords = [
@@ -51,7 +71,8 @@ document.addEventListener('DOMContentLoaded', function() {
         strongKeywords: defaultStrongKeywords,
         supportingKeywords: defaultSupportingKeywords,
         screenshotDelay: true,
-        delayTime: 500
+        delayTime: 500,
+        cropScreenshot: true // Add default value
       }, function(items) {
         // Set form values
         autoDetectToggle.checked = items.autoDetect;
@@ -61,6 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filenameFormat.value = items.filenameFormat;
         screenshotDelayToggle.checked = items.screenshotDelay;
         delayTimeInput.value = items.delayTime;
+        cropScreenshotToggle.checked = items.cropScreenshot;
         
         // Render keywords
         renderKeywords('strong', items.strongKeywords);
@@ -109,12 +131,12 @@ document.addEventListener('DOMContentLoaded', function() {
         strongKeywords: strongKeywords,
         supportingKeywords: supportingKeywords,
         screenshotDelay: screenshotDelayToggle.checked,
-        delayTime: parseInt(delayTimeInput.value)
+        delayTime: parseInt(delayTimeInput.value),
+        cropScreenshot: cropScreenshotToggle.checked
       };
 
       chrome.storage.sync.set(settings, function() {
-        // Show saved message
-        showSavedMessage();
+        showSavedMessage(); // This should now work
         
         // Notify content script of settings change
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {

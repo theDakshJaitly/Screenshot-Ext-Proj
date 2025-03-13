@@ -231,6 +231,17 @@
       <label for="delayTime">Delay time (ms):</label>
       <input type="number" id="delayTime" value="500" min="0" max="5000">
     </div>
+
+    <div class="form-group toggle-container">
+      <label class="toggle">
+        <input type="checkbox" id="cropScreenshot" checked>
+        <span class="slider"></span>
+      </label>
+      <span>Crop screenshots to receipt area</span>
+      <div class="setting-description">
+        When enabled, only the detected receipt area will be captured. Otherwise, the entire page will be captured.
+      </div>
+    </div>
   </div>
   
   <button id="saveSettings">Save Settings</button>
