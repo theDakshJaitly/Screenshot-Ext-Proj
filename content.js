@@ -1,5 +1,7 @@
 // Configuration for auto-detection
 let autoDetectEnabled = true;
+let lastScreenshotUrl = null; // Track last screenshot URL
+let screenshotCooldown = false; // Prevent rapid screenshots
 let settings = {
   strongKeywords: [],
   supportingKeywords: [],
@@ -9,6 +11,12 @@ let settings = {
   delayTime: 500,
   cropScreenshot: true  // Add this line
 };
+
+// Add at the top with other variables
+let detectionActive = true; // New flag to control detection state
+
+// Define observer at the top with other variables
+let observer;
 
 // Load settings from storage
 chrome.storage.sync.get({
@@ -31,49 +39,113 @@ chrome.storage.sync.get({
 }, function(items) {
   autoDetectEnabled = items.autoDetect;
   settings = items;
+  
+  // Initialize observer
+  observer = new MutationObserver((mutations) => {
+    clearTimeout(observer.timeout);
+    observer.timeout = setTimeout(async () => {
+      // Check if detection is still active
+      if (autoDetectEnabled && detectionActive && !screenshotCooldown) {
+        const isReceipt = await detectReceipt();
+        if (isReceipt && window.location.href !== lastScreenshotUrl) {
+          console.log('Receipt detected after DOM mutation!');
+          if (settings.showNotifications) {
+            showToast('Receipt detected! Taking screenshot...');
+          }
+          lastScreenshotUrl = window.location.href;
+          screenshotCooldown = true;
+          detectionActive = false; // Stop further detection
+          await captureReceipt();
+          // We don't reset the cooldown or detectionActive flag
+        }
+      }
+    }, 1000);
+  });
+
+  // Initialize detection on page load
+  window.addEventListener('load', () => {
+    setTimeout(async () => {
+      if (autoDetectEnabled && detectionActive && !screenshotCooldown) {
+        const isReceipt = await detectReceipt();
+        if (isReceipt && window.location.href !== lastScreenshotUrl) {
+          console.log('Receipt detected on page!');
+          if (settings.showNotifications) {
+            showToast('Receipt detected! Taking screenshot...');
+          }
+          lastScreenshotUrl = window.location.href;
+          screenshotCooldown = true;
+          detectionActive = false; // Stop further detection
+          await captureReceipt();
+        }
+      }
+
+      // Start observing for dynamic changes
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: false
+      });
+    }, 1500);
+  });
 });
 
-// Initialize and listen for messages
+// Update listeners to a single message handler at the top level
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'toggleAutoDetect') {
     autoDetectEnabled = message.enabled;
     sendResponse({success: true});
-  } else if (message.action === 'takeScreenshot') {
+  } 
+  else if (message.action === 'takeScreenshot') {
+    if (screenshotCooldown || lastScreenshotUrl === window.location.href) {
+      sendResponse({
+        success: false, 
+        error: 'Screenshot already taken for this page'
+      });
+      return true;
+    }
+    
+    lastScreenshotUrl = window.location.href;
+    screenshotCooldown = true;
+    detectionActive = false; // Stop further detection
+    
     captureReceipt()
-      .then(() => sendResponse({success: true}))
+      .then(() => {
+        sendResponse({success: true});
+      })
       .catch(error => {
+        screenshotCooldown = false;
+        detectionActive = true; // Re-enable detection only on error
         console.error('Screenshot error:', error);
         sendResponse({success: false, error: error.toString()});
       });
-    return true; // Keep the message channel open for async response
+    return true;
+  }
+  else if (message.action === 'settingsUpdated') {
+    settings = message.settings;
+    
+    // Re-run detection only if we haven't captured this page yet
+    if (autoDetectEnabled && window.location.href !== lastScreenshotUrl && !screenshotCooldown) {
+      (async () => {
+        const isReceipt = await detectReceipt();
+        if (isReceipt) {
+          lastScreenshotUrl = window.location.href;
+          screenshotCooldown = true;
+          await captureReceipt();
+          setTimeout(() => {
+            screenshotCooldown = false;
+          }, 5000);
+        }
+      })();
+    }
+    
+    sendResponse({success: true});
+    return true;
   }
 });
 
-// Add listener for settings updates
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'settingsUpdated') {
-        // Update local settings
-        settings = message.settings;
-        
-        // Re-run detection if needed
-        if (autoDetectEnabled) {
-            detectReceipt().then(isReceipt => {
-                if (isReceipt) {
-                    console.log('Receipt detected after settings update!');
-                    if (settings.showNotifications) {
-                        showToast('Receipt detected! Taking screenshot...');
-                    }
-                    captureReceipt();
-                }
-            });
-        }
-        
-        sendResponse({success: true});
-    }
-});
-
 // Function to detect receipts on the page
-function detectReceipt() {
+async function detectReceipt() {
   try {
     // Get the page text content
     const pageText = document.body.innerText.toLowerCase();
@@ -428,33 +500,8 @@ async function captureReceipt() {
 
     console.log('Receipt element found:', receiptElement);
 
-    const elementToCapture = receiptElement;
-    const padding = 20;
-
-    // Get the element's position relative to the viewport
-    const rect = elementToCapture.getBoundingClientRect();
-    
-    // Calculate scroll position
-    const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-
-    // Create visual highlight with fixed positioning
-    const highlighter = document.createElement('div');
-    highlighter.style.position = 'fixed'; // Changed to fixed
-    highlighter.style.border = '2px solid rgba(66, 133, 244, 0.7)';
-    highlighter.style.backgroundColor = 'rgba(66, 133, 244, 0.1)';
-    highlighter.style.zIndex = '9999';
-    highlighter.style.pointerEvents = 'none';
-    Object.assign(highlighter.style, {
-      left: (rect.left - padding) + 'px',
-      top: (rect.top - padding) + 'px',
-      width: (rect.width + padding * 2) + 'px',
-      height: (rect.height + padding * 2) + 'px'
-    });
-    document.body.appendChild(highlighter);
-
-    // Scroll the element into view
-    elementToCapture.scrollIntoView({
+    // Scroll the element into view and wait
+    receiptElement.scrollIntoView({
       behavior: 'smooth',
       block: 'center'
     });
@@ -462,30 +509,41 @@ async function captureReceipt() {
     // Wait for scroll and animations
     await new Promise(resolve => setTimeout(resolve, settings.delayTime || 500));
 
+    // Add visual feedback
+    const rect = receiptElement.getBoundingClientRect();
+    const highlighter = document.createElement('div');
+    highlighter.style.position = 'fixed';
+    highlighter.style.border = '2px solid rgba(66, 133, 244, 0.7)';
+    highlighter.style.backgroundColor = 'rgba(66, 133, 244, 0.1)';
+    highlighter.style.zIndex = '9999';
+    highlighter.style.pointerEvents = 'none';
+    Object.assign(highlighter.style, {
+      left: rect.left + 'px',
+      top: rect.top + 'px',
+      width: rect.width + 'px',
+      height: rect.height + 'px'
+    });
+    document.body.appendChild(highlighter);
+
     if (settings.showNotifications) {
       showToast('Taking receipt screenshot...');
     }
 
-    // Take screenshot with corrected capture area
-    const canvas = await html2canvas(elementToCapture, {
+    // Take screenshot
+    const canvas = await html2canvas(receiptElement, {
       backgroundColor: '#ffffff',
-      logging: false,
+      logging: true, // Enable logging for debugging
       scale: window.devicePixelRatio || 1,
       useCORS: true,
-      allowTaint: true,
-      foreignObjectRendering: false,
-      // Remove x, y, width, height to capture the entire element
-      scrollX: -window.scrollX,
-      scrollY: -window.scrollY,
-      windowWidth: window.innerWidth,
-      windowHeight: window.innerHeight
+      allowTaint: true
     });
 
     // Clean up
     document.body.removeChild(highlighter);
 
     // Convert to data URL
-    const imageData = canvas.toDataURL('image/png', 1.0);
+    const imageData = canvas.toDataURL('image/png');
+    console.log('Image data created, length:', imageData.length); // Debug log
 
     // Send to background script
     return new Promise((resolve, reject) => {
@@ -495,12 +553,18 @@ async function captureReceipt() {
         originalUrl: window.location.href
       }, (response) => {
         if (chrome.runtime.lastError) {
+          console.error('Message sending failed:', chrome.runtime.lastError);
           reject(chrome.runtime.lastError);
         } else {
-          if (settings.showNotifications) {
-            showToast('Receipt saved successfully!');
+          console.log('Save response:', response); // Debug log
+          if (response && response.success) {
+            if (settings.showNotifications) {
+              showToast('Receipt saved successfully!');
+            }
+            resolve(true);
+          } else {
+            reject(new Error(response?.error || 'Failed to save screenshot'));
           }
-          resolve(true);
         }
       });
     });
@@ -510,20 +574,6 @@ async function captureReceipt() {
     if (settings.showNotifications) {
       showToast('Error capturing receipt: ' + error.message, 'error');
     }
-    return false;
+    throw error;
   }
 }
-
-// Initialize - run receipt detection when page fully loads
-window.addEventListener('load', () => {
-  // Short delay to ensure all content is loaded
-  setTimeout(() => {
-    if (autoDetectEnabled && detectReceipt()) {
-      console.log('Receipt detected on page!');
-      if (settings.showNotifications) {
-        showToast('Receipt detected! Taking screenshot...');
-      }
-      captureReceipt();
-    }
-  }, 1500);
-});

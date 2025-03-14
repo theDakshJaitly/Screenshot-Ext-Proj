@@ -9,6 +9,21 @@ self.addEventListener('install', (event) => {
 
 let contextMenuCreated = false;
 
+// Add to top of file with other listeners
+let saveLocation = '';
+
+// Load save location from storage
+chrome.storage.sync.get({ saveFolder: '' }, (items) => {
+  saveLocation = items.saveFolder;
+});
+
+// Update save location when settings change
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (changes.saveFolder) {
+    saveLocation = changes.saveFolder.newValue;
+  }
+});
+
 // Create the context menu
 function createContextMenu() {
   if (contextMenuCreated) return;
@@ -105,32 +120,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   else if (request.action === 'saveScreenshot') {
-    try {
-      // Generate filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const hostname = new URL(request.originalUrl).hostname;
-      const filename = `receipt_${hostname}_${timestamp}.png`;
+    // Log the incoming request
+    console.log('Received saveScreenshot request:', {
+      hasImageData: !!request.imageData,
+      url: request.originalUrl
+    });
 
-      // Save the screenshot
-      chrome.downloads.download({
-        url: request.imageData,
-        filename: filename,
-        saveAs: false
-      }, (downloadId) => {
-        if (chrome.runtime.lastError) {
-          console.error('Download failed:', chrome.runtime.lastError);
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          console.log('Screenshot saved:', filename);
-          sendResponse({ success: true, downloadId: downloadId });
-        }
+    saveScreenshot(request.imageData, request.originalUrl)
+      .then(result => {
+        console.log('Screenshot saved successfully:', result);
+        sendResponse(result);
+      })
+      .catch(error => {
+        console.error('Screenshot save failed:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message || 'Failed to save screenshot'
+        });
       });
-      
-      return true; // Keep message channel open
-    } catch (error) {
-      console.error('Error saving screenshot:', error);
-      sendResponse({ success: false, error: error.message });
-    }
+    return true; // Keep message channel open
   }
   return true;
 });
@@ -304,21 +312,59 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // Add new function to save screenshots
-async function saveScreenshot(imageUrl, originalUrl) {
+async function saveScreenshot(imageData, originalUrl) {
   try {
-    const hostname = new URL(originalUrl).hostname;
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `receipt_${hostname}_${timestamp}.png`;
+    if (!imageData || !imageData.startsWith('data:image/png;base64,')) {
+      throw new Error('Invalid image data');
+    }
 
-    await chrome.downloads.download({
-      url: imageUrl,
-      filename: filename,
-      saveAs: false
+    // Get settings
+    const settings = await chrome.storage.sync.get({
+      saveFolder: 'receipts',
+      filenameFormat: 'receipt_{hostname}_{date}'
     });
 
-    return true;
+    // Generate filename
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const hostname = new URL(originalUrl).hostname;
+    
+    // Build filename
+    let filename = settings.filenameFormat
+      .replace('{hostname}', hostname)
+      .replace('{date}', timestamp)
+      + '.png';
+
+    // Add folder if specified
+    if (settings.saveFolder && settings.saveFolder.trim()) {
+      filename = `${settings.saveFolder.trim()}/${filename}`;
+    }
+
+    console.log('Attempting to save:', filename);
+
+    return new Promise((resolve, reject) => {
+      chrome.downloads.download({
+        url: imageData,
+        filename: filename,
+        saveAs: false,
+        conflictAction: 'uniquify'
+      }, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          console.error('Download failed:', chrome.runtime.lastError);
+          reject(chrome.runtime.lastError);
+        } else if (!downloadId) {
+          reject(new Error('No download ID returned'));
+        } else {
+          resolve({
+            success: true,
+            downloadId: downloadId,
+            path: filename
+          });
+        }
+      });
+    });
+
   } catch (error) {
-    console.error('Error saving screenshot:', error);
+    console.error('SaveScreenshot error:', error);
     throw error;
   }
 }

@@ -17,6 +17,22 @@ function showSavedMessage() {
     }, 2000);
 }
 
+function chooseSaveFolder() {
+    const input = document.getElementById('saveFolder');
+    const folderPath = input.value.trim();
+    
+    // Validate folder path
+    if (folderPath && !/^[\w-]+(\/[\w-]+)*$/.test(folderPath)) {
+      alert('Please use only letters, numbers, dashes and forward slashes for the folder path');
+      return;
+    }
+  
+    // Save the folder path
+    chrome.storage.sync.set({ saveFolder: folderPath }, () => {
+      showSavedMessage();
+    });
+  }
+
 document.addEventListener('DOMContentLoaded', function() {
     // Get form elements
     const autoDetectToggle = document.getElementById('autoDetect');
@@ -58,6 +74,11 @@ document.addEventListener('DOMContentLoaded', function() {
     addStrongKeywordBtn.addEventListener('click', () => addKeyword('strong'));
     addSupportingKeywordBtn.addEventListener('click', () => addKeyword('supporting'));
     saveSettingsBtn.addEventListener('click', saveSettings);
+    document.getElementById('saveFolder').addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') {
+          chooseSaveFolder();
+        }
+      });
     
     // Function to load settings
     function loadSettings() {
@@ -211,22 +232,33 @@ document.addEventListener('DOMContentLoaded', function() {
       container.removeChild(element);
     }
     
-    // Function to choose save folder
+    // Update the chooseSaveFolder function
     function chooseSaveFolder() {
-      // Chrome doesn't provide a direct way to select folders via JavaScript
-      // Instead, we'll use the downloads API to trigger a file picker
-      chrome.downloads.showDefaultFolder();
+      // Create a temporary input element
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.webkitdirectory = true; // Allow directory selection
+      input.directory = true;
       
-      // Show a message to the user
-      statusElement.textContent = 'Please select a folder in the opened window';
+      input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          // Get the directory path
+          const path = e.target.files[0].webkitRelativePath.split('/')[0];
+          saveFolderInput.value = path;
+          
+          // Show success message
+          const statusElement = document.getElementById('status');
+          statusElement.textContent = 'Save location updated';
+          statusElement.style.color = '#2e7d32';
+          
+          // Clear message after 2 seconds
+          setTimeout(() => {
+            statusElement.textContent = '';
+          }, 2000);
+        }
+      });
       
-      // Since we can't directly access the folder selection dialog,
-      // we'll provide a way for users to manually enter the folder path
-      const folderPath = prompt('Enter the folder path where you want to save screenshots:');
-      
-      if (folderPath) {
-        saveFolderInput.value = folderPath;
-        statusElement.textContent = 'Save location updated';
-      }
+      // Trigger the file input
+      input.click();
     }
   });

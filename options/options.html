@@ -137,6 +137,22 @@
     .add-keyword button {
       padding: 8px 15px;
     }
+    .folder-input {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    }
+    .folder-input input {
+    flex-grow: 1;
+    background-color: #f5f5f5;
+    }
+    .folder-path {
+    font-family: monospace;
+    padding: 4px 8px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    word-break: break-all;
+    }
   </style>
 </head>
 <body>
@@ -178,12 +194,18 @@
   <div class="section">
     <div class="section-title">Save Location</div>
     <div class="form-group">
-      <label for="saveFolder">Save screenshots to:</label>
-      <div style="display: flex; gap: 10px;">
-        <input type="text" id="saveFolder" placeholder="Default downloads folder" readonly>
-        <button id="chooseFolderBtn">Choose</button>
+      <label for="saveFolder">Save in folder (within Downloads):</label>
+      <div class="folder-input">
+        <input type="text" id="saveFolder" 
+               placeholder="e.g., receipts/work or receipts/personal">
+        <button id="chooseFolderBtn">Set Folder</button>
+      </div>
+      <div class="setting-description">
+        Enter a subfolder path (e.g., "receipts" or "receipts/work"). 
+        Files will be saved in your Downloads folder under this path.
       </div>
     </div>
+  </div>
     
     <div class="form-group">
       <label for="filenameFormat">Filename format:</label>
